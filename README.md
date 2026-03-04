@@ -1,6 +1,6 @@
 # Hello World 👋
 
-I enjoy solving complex problems with technology and building systems that scale.
+I enjoy solving complex problems with technology. 
 
 Beyond engineering into **human psychology and philosophy** — understanding how people think.
 
