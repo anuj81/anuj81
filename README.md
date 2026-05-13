@@ -159,11 +159,11 @@ sequenceDiagram
     participant AUD as Audit Sinks
 
     rect rgba(255, 250, 230, 0.7)
-    Note over C, KC: Once per session — Device Code flow
-    C->>KC: POST /auth/device (client_id=eunomia-cli)
-    KC-->>C: device_code, user_code, verification_uri
+    Note over C,KC: Once per session — Device Code flow
+    C->>KC: POST /auth/device
+    KC-->>C: device_code + user_code + verification_uri
     Note over C: User approves in browser
-    C->>KC: poll POST /token
+    C->>KC: Poll POST /token
     KC-->>C: access_token (JWT) + refresh_token
     Note over C: Cached at ~/.eunomia/cli.json (mode 0600)
     end
@@ -171,52 +171,52 @@ sequenceDiagram
     C->>M: POST /v1/execute_nlq + Bearer JWT + query
 
     rect rgba(245, 235, 255, 0.7)
-    Note over M, KC: Validate inbound JWT
-    M->>KC: GET /.well-known/openid-configuration + JWKS (cached)
+    Note over M,KC: Validate inbound JWT
+    M->>KC: GET /.well-known + JWKS (cached)
     KC-->>M: JWKS
-    M->>M: Verify signature, iss, exp; extract sub, email, roles
+    Note over M: Verify signature / iss / exp — extract sub + email + roles
     end
 
     rect rgba(230, 240, 255, 0.7)
-    Note over M, OM: OM is the policy decision point
-    M->>M: role → access tag (settings.authz.role_to_access_tag)
-    M->>OM: GET /search/query?q=tags.tagFQN:"..."  (Bearer = user JWT)
+    Note over M,OM: OM is the policy decision point
+    Note over M: Map role → access tag (settings.authz.role_to_access_tag)
+    M->>OM: GET /search/query (q=tags.tagFQN ... Bearer = user JWT)
     OM-->>M: Allowed view names per tag policy
-    M->>OM: GET /tables/name/{fqn}?fields=columns,tags  (per allowed name)
+    M->>OM: GET /tables/name (per allowed name)
     OM-->>M: Rich payload + PII tags
-    M-->>AUD: record.allowed_views, pii_columns
+    M-->>AUD: record.allowed_views + pii_columns
     end
 
     rect rgba(240, 255, 240, 0.7)
-    Note over M, RAG: Relevance ranking — never widens authorization
-    M->>RAG: POST /v1/retrieve { query, allowed_views, k }
+    Note over M,RAG: Relevance ranking — never widens authorization
+    M->>RAG: POST /v1/retrieve (query + allowed_views + k)
     RAG-->>M: Top-K ranked subset
     end
 
     rect rgba(245, 240, 255, 0.7)
-    Note over M, LLM: Constrained generation + AST validation
+    Note over M,LLM: Constrained generation + AST validation
     loop Up to llm.max_retries
         M->>LLM: Prompt (top-K only)
         LLM-->>M: Generated SQL
-        M->>M: sqlglot AST validate against FULL allowed_views
+        Note over M: sqlglot AST validate against FULL allowed_views
         alt invalid
             M->>LLM: error context (next iteration)
         else valid
             Note over M: break
         end
     end
-    M-->>AUD: record.executed_sql, validation_attempts
+    M-->>AUD: record.executed_sql + validation_attempts
     end
 
     rect rgba(255, 240, 240, 0.7)
-    Note over M, DB: Execute + post-process
+    Note over M,DB: Execute + post-process
     M->>DB: Execute validated SQL
     DB-->>M: Raw rows
-    M->>M: mask_pii (unmask iff JWT carries eunomia-pii-unmask)
-    M-->>AUD: record.rows_returned, pii_columns_masked, status
+    Note over M: mask_pii — unmask iff JWT carries eunomia-pii-unmask
+    M-->>AUD: record.rows_returned + pii_columns_masked + status
     end
 
-    M-->>C: SSE stream + final { results, executed_sql, request_id }
+    M-->>C: SSE stream + final (results + executed_sql + request_id)
 ```
 
 Read this once and you've got the trust contract. Every box and every arrow corresponds to code you can read.
